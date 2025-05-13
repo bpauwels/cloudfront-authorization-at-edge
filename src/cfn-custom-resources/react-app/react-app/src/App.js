@@ -2,31 +2,39 @@
 // SPDX-License-Identifier: MIT-0
 
 import React, { useState, useEffect } from "react";
-import { Amplify } from "@aws-amplify/core";
-import { Auth } from "@aws-amplify/auth";
+import { Amplify } from "aws-amplify";
+import { CookieStorage } from "aws-amplify/utils";
+import { cognitoUserPoolsTokenProvider } from "aws-amplify/auth/cognito";
+import { fetchAuthSession, signOut } from "aws-amplify/auth";
 import "./App.css";
 
 Amplify.configure({
   Auth: {
-    region: process.env.REACT_APP_USER_POOL_REGION,
-    userPoolId: process.env.REACT_APP_USER_POOL_ID,
-    userPoolWebClientId: process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID,
-    cookieStorage: {
-      domain: process.env.REACT_APP_COOKIE_DOMAIN, // Use a single space " " for host-only cookies
-      expires: null, // null means session cookies
-      path: "/",
-      secure: true, // for developing on localhost over http: set to false
-      sameSite: "lax",
-    },
-    oauth: {
-      domain: process.env.REACT_APP_USER_POOL_AUTH_DOMAIN,
-      scope: process.env.REACT_APP_USER_POOL_SCOPES.split(","),
-      redirectSignIn: `https://${window.location.hostname}${process.env.REACT_APP_USER_POOL_REDIRECT_PATH_SIGN_IN}`,
-      redirectSignOut: `https://${window.location.hostname}${process.env.REACT_APP_USER_POOL_REDIRECT_PATH_SIGN_OUT}`,
-      responseType: "code",
+    Cognito: {
+      userPoolClientId: process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID,
+      userPoolId: process.env.REACT_APP_USER_POOL_ID,
+      loginWith: {
+        oauth: {
+          domain: process.env.REACT_APP_USER_POOL_AUTH_DOMAIN,
+          scope: process.env.REACT_APP_USER_POOL_SCOPES.split(","),
+          redirectSignIn: `https://${window.location.hostname}${process.env.REACT_APP_USER_POOL_REDIRECT_PATH_SIGN_IN}`,
+          redirectSignOut: `https://${window.location.hostname}${process.env.REACT_APP_USER_POOL_REDIRECT_PATH_SIGN_OUT}`,
+          responseType: "code",
+        },
+      },
     },
   },
 });
+
+cognitoUserPoolsTokenProvider.setKeyValueStorage(
+  new CookieStorage({
+    domain: process.env.REACT_APP_COOKIE_DOMAIN,
+    expires: null, // null means session cookies
+    path: "/",
+    secure: true, // for developing on localhost over http: set to false
+    sameSite: "lax",
+  })
+);
 
 const App = () => {
   const [state, setState] = useState({
@@ -36,18 +44,17 @@ const App = () => {
   });
 
   useEffect(() => {
-    Auth.currentSession()
+    fetchAuthSession()
       .then((user) =>
         setState({
           username: user.username,
-          email: user.getIdToken().decodePayload().email,
+          email: user.tokens.idToken.payload.email,
           authenticated: true,
         })
       )
       .catch(() => setState({ authenticated: false }));
-
     // Schedule check and refresh (when needed) of JWT's every 5 min:
-    const i = setInterval(() => Auth.currentSession(), 5 * 60 * 1000);
+    const i = setInterval(() => fetchAuthSession(), 5 * 60 * 1000);
     return () => clearInterval(i);
   }, []);
 
@@ -136,34 +143,29 @@ const App = () => {
           config
           <span className="config-text">
             {`Amplify.configure({
-  Auth: {
-    region: "us-east-1",
-    userPoolId: "${process.env.REACT_APP_USER_POOL_ID}",
-    userPoolWebClientId: "${process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID}",
-    cookieStorage: {
-      domain: "${
-        process.env.REACT_APP_COOKIE_DOMAIN
-      }", // Use a single space " " for host-only cookies
-      expires: null, // null means session cookies
-      path: "/",
-      secure: true, // for developing on localhost over http: set to false
-      sameSite: "lax"
-    },
-    oauth: {
-      domain: "${process.env.REACT_APP_USER_POOL_AUTH_DOMAIN}",
-      scope: ${JSON.stringify(
-        process.env.REACT_APP_USER_POOL_SCOPES.split(",")
-      )},
-      redirectSignIn: "https://${window.location.hostname}${
-              process.env.REACT_APP_USER_POOL_REDIRECT_PATH_SIGN_IN
-            }",
-      redirectSignOut: "https://${window.location.hostname}${
-              process.env.REACT_APP_USER_POOL_REDIRECT_PATH_SIGN_OUT
-            }",
-      responseType: "code"
+Auth: {
+  Cognito: {
+    userPoolClientId: process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID,
+    userPoolId: process.env.REACT_APP_USER_POOL_ID,
+    loginWith: {
+      oauth: {
+        domain: process.env.REACT_APP_USER_POOL_AUTH_DOMAIN,
+        scope: process.env.REACT_APP_USER_POOL_SCOPES.split(","),
+        redirectSignIn: "https://${window.location.hostname}${process.env.REACT_APP_USER_POOL_REDIRECT_PATH_SIGN_IN}",
+        redirectSignOut: "https://${window.location.hostname}${process.env.REACT_APP_USER_POOL_REDIRECT_PATH_SIGN_OUT}",
+        responseType: "code",
+      }
     }
-  }
-});`}
+  },
+}
+});
+cognitoUserPoolsTokenProvider.setKeyValueStorage(new CookieStorage({
+  domain: 'd31gk26iudwaex.cloudfront.net',
+  expires: null, // null means session cookies
+  path: "/",
+  secure: true, // for developing on localhost over http: set to false
+  sameSite: "lax",
+}));`}
           </span>
         </span>
         .
@@ -180,9 +182,9 @@ const App = () => {
       <p className="explanation">
         To sign-out both locally (by clearing cookies) as well as at the Cognito
         hosted UI, use the sign-out button:{" "}
-        <button onClick={() => Auth.signOut()}>Sign out</button>. That uses
-        Amplify to sign out. Alternatively, sign out using Lambda@Edge by
-        explicitly visiting the sign-out URL:{" "}
+        <button onClick={async () => await signOut()}>Sign out</button>. That uses Amplify
+        to sign out. Alternatively, sign out using Lambda@Edge by explicitly
+        visiting the sign-out URL:{" "}
         <a href={process.env.REACT_APP_SIGN_OUT_URL}>Sign Out</a>.
       </p>
 
