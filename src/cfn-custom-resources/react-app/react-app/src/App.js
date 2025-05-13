@@ -160,7 +160,7 @@ Auth: {
 }
 });
 cognitoUserPoolsTokenProvider.setKeyValueStorage(new CookieStorage({
-  domain: 'd31gk26iudwaex.cloudfront.net',
+  domain: process.env.REACT_APP_COOKIE_DOMAIN,
   expires: null, // null means session cookies
   path: "/",
   secure: true, // for developing on localhost over http: set to false
